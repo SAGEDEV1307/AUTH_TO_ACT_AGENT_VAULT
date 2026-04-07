@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blockchain — Authorized to Act</title>
+  <link rel="stylesheet" href="/styles/globals.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar-brand" href="/">Authorized <span>to Act</span></a>
+    <div class="flex gap-2 items-center">
+      <span id="user-name" class="text-sm text-muted"></span>
+      <button class="btn btn-ghost" onclick="logout()">Sign Out</button>
+    </div>
+  </nav>
+  <div class="layout">
+    <aside class="sidebar">
+      <a href="/dashboard">📊 Overview</a>
+      <a href="/dashboard/agent.html">🤖 Agent</a>
+      <a href="/dashboard/blockchain.html" class="active">⛓️ Blockchain</a>
+      <a href="/dashboard/history.html">📋 History</a>
+      <a href="/dashboard/keys.html">🗝️ API Keys</a>
+      <a href="/dashboard/settings.html">⚙️ Settings</a>
+    </aside>
+    <main class="main">
+      <h2 class="mb-4">Blockchain</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+        <div class="card">
+          <div class="text-muted text-sm mb-2">Wallet Address</div>
+          <code id="wallet-address" style="font-size:12px;word-break:break-all;">Loading...</code>
+          <div class="mt-2 text-muted text-sm">Balance</div>
+          <div id="wallet-balance" style="font-size:1.5rem;font-weight:700;">—</div>
+        </div>
+        <div class="card">
+          <div class="text-muted text-sm mb-2">Gas Price</div>
+          <div id="gas-price" style="font-size:1.5rem;font-weight:700;">—</div>
+          <div class="text-muted text-sm mt-2">Gwei</div>
+          <button class="btn btn-ghost mt-4" style="font-size:12px;" onclick="loadGas()">Refresh</button>
+        </div>
+      </div>
+      <div class="card mb-4">
+        <h3 class="mb-4">Send ETH</h3>
+        <div style="display:flex;flex-direction:column;gap:12px;max-width:400px;">
+          <input id="send-to" class="input" placeholder="Recipient address (0x...)">
+          <input id="send-value" class="input" type="number" step="0.0001" placeholder="Amount (ETH)">
+          <button class="btn btn-primary" onclick="sendEth()">Send Transaction</button>
+        </div>
+        <div id="send-result" class="mt-4" style="display:none;"></div>
+      </div>
+      <div class="card">
+        <h3 class="mb-4">Recent Transactions</h3>
+        <table class="table">
+          <thead><tr><th>Hash</th><th>To</th><th>Value</th><th>Status</th><th>Date</th></tr></thead>
+          <tbody id="tx-table"><tr><td colspan="5" class="text-muted text-sm">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    let authToken = null;
+    requireAuth(async (token) => {
+      authToken = token;
+      await Promise.all([loadBalance(), loadGas(), loadTransactions()]);
+    });
+
+    async function loadBalance() {
+      try {
+        const res = await apiFetch('/api/blockchain/balance', authToken);
+        const data = await res.json();
+        document.getElementById('wallet-address').textContent = data.address || 'No wallet';
+        document.getElementById('wallet-balance').textContent = `${parseFloat(data.ether || 0).toFixed(6)} ETH`;
+      } catch { document.getElementById('wallet-balance').textContent = 'Error'; }
+    }
+
+    async function loadGas() {
+      try {
+        const res = await apiFetch('/api/blockchain/gas', authToken);
+        const data = await res.json();
+        document.getElementById('gas-price').textContent = data.gasPriceGwei || '—';
+      } catch { document.getElementById('gas-price').textContent = 'Error'; }
+    }
+
+    async function loadTransactions() {
+      try {
+        const res = await apiFetch('/api/blockchain/transactions?limit=10', authToken);
+        const { transactions } = await res.json();
+        const tbody = document.getElementById('tx-table');
+        if (!transactions.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-sm">No transactions</td></tr>';
+          return;
+        }
+        tbody.innerHTML = transactions.map(t => `
+          <tr>
+            <td><code style="font-size:11px;">${t.tx_hash.slice(0,10)}…</code></td>
+            <td><code style="font-size:11px;">${t.to_address.slice(0,10)}…</code></td>
+            <td>${t.value_ether} ETH</td>
+            <td><span class="badge badge-${t.status==='confirmed'?'green':t.status==='failed'?'red':'yellow'}">${t.status}</span></td>
+            <td class="text-muted text-sm">${new Date(t.created_at).toLocaleDateString()}</td>
+          </tr>`).join('');
+      } catch { document.getElementById('tx-table').innerHTML = '<tr><td colspan="5" class="text-danger text-sm">Failed to load</td></tr>'; }
+    }
+
+    async function sendEth() {
+      const to = document.getElementById('send-to').value.trim();
+      const value = document.getElementById('send-value').value.trim();
+      if (!to || !value) return alert('Enter recipient and amount');
+      if (!confirm(`Send ${value} ETH to ${to}?`)) return;
+      const result = document.getElementById('send-result');
+      result.style.display = 'block';
+      result.className = 'mt-4 text-muted text-sm';
+      result.textContent = 'Sending…';
+      try {
+        const res = await apiFetch('/api/blockchain/send', authToken, { method: 'POST', body: { to, value } });
+        const data = await res.json();
+        if (data.txHash) {
+          result.className = 'mt-4 text-success text-sm';
+          result.textContent = `Sent! TX: ${data.txHash}`;
+          setTimeout(loadTransactions, 2000);
+        } else {
+          result.className = 'mt-4 text-danger text-sm';
+          result.textContent = data.error || 'Failed';
+        }
+      } catch (err) {
+        result.className = 'mt-4 text-danger text-sm';
+        result.textContent = 'Error: ' + err.message;
+      }
+    }
+  </script>
+</body>
+</html>

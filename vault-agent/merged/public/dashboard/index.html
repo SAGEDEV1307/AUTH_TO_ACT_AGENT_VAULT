@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Authorized to Act</title>
+  <link rel="stylesheet" href="/styles/globals.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar-brand" href="/">Authorized <span>to Act</span></a>
+    <div class="flex gap-2 items-center">
+      <span id="user-name" class="text-sm text-muted"></span>
+      <button class="btn btn-ghost" onclick="logout()">Sign Out</button>
+    </div>
+  </nav>
+  <div class="layout">
+    <aside class="sidebar">
+      <a href="/dashboard" class="active">📊 Overview</a>
+      <a href="/dashboard/agent.html">🤖 Agent</a>
+      <a href="/dashboard/blockchain.html">⛓️ Blockchain</a>
+      <a href="/dashboard/history.html">📋 History</a>
+      <a href="/dashboard/keys.html">🗝️ API Keys</a>
+      <a href="/dashboard/settings.html">⚙️ Settings</a>
+    </aside>
+    <main class="main">
+      <h2 class="mb-4">Overview</h2>
+      <div id="stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:32px;">
+        <div class="card"><div class="text-muted text-sm mb-2">Agent Runs</div><div id="stat-runs" style="font-size:2rem;font-weight:700;">—</div></div>
+        <div class="card"><div class="text-muted text-sm mb-2">Permissions</div><div id="stat-perms" style="font-size:2rem;font-weight:700;">—</div></div>
+        <div class="card"><div class="text-muted text-sm mb-2">API Keys</div><div id="stat-keys" style="font-size:2rem;font-weight:700;">—</div></div>
+      </div>
+      <div class="card">
+        <h3 class="mb-4">Recent Agent Runs</h3>
+        <table class="table">
+          <thead><tr><th>Message</th><th>Model</th><th>Status</th><th>Date</th></tr></thead>
+          <tbody id="runs-table"><tr><td colspan="4" class="text-muted text-sm">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    requireAuth(async (token) => {
+      // Load recent runs
+      const res = await apiFetch('/api/agent/history?limit=5', token);
+      const { runs, total } = await res.json();
+      document.getElementById('stat-runs').textContent = total;
+
+      const permsRes = await apiFetch('/api/auth/permissions', token);
+      const { permissions } = await permsRes.json();
+      document.getElementById('stat-perms').textContent = permissions.length;
+
+      const keysRes = await apiFetch('/api/keys', token);
+      const { keys } = await keysRes.json();
+      document.getElementById('stat-keys').textContent = keys.filter(k => !k.revoked_at).length;
+
+      const tbody = document.getElementById('runs-table');
+      if (!runs.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-muted text-sm">No runs yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = runs.map(r => `
+        <tr>
+          <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(r.user_message)}</td>
+          <td><code>${r.model}</code></td>
+          <td><span class="badge badge-${statusColor(r.status)}">${r.status}</span></td>
+          <td class="text-muted text-sm">${new Date(r.created_at).toLocaleString()}</td>
+        </tr>`).join('');
+    });
+
+    function statusColor(s) {
+      return { completed:'green', failed:'red', running:'yellow', pending:'purple' }[s] || 'purple';
+    }
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+  </script>
+</body>
+</html>

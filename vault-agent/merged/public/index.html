@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authorized to Act</title>
+  <link rel="stylesheet" href="/styles/globals.css">
+  <style>
+    .hero { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center; padding: 40px 24px; }
+    .hero h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; letter-spacing: -1px; margin-bottom: 16px; }
+    .hero h1 span { color: var(--primary); }
+    .hero p  { font-size: 18px; color: var(--text-muted); max-width: 520px; margin-bottom: 40px; line-height: 1.7; }
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; max-width: 900px; margin: 60px auto; padding: 0 24px; }
+    .feature-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+    .feature-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+    .feature-card p  { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+    .feature-icon { font-size: 28px; margin-bottom: 12px; }
+    #login-btn { display: none; }
+    #user-section { display: none; }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <span class="navbar-brand">Authorized <span>to Act</span></span>
+    <div class="flex gap-2 items-center">
+      <button id="login-btn" class="btn btn-primary" onclick="login()">Sign In</button>
+      <div id="user-section" class="flex items-center gap-2">
+        <span id="user-name" class="text-sm text-muted"></span>
+        <a href="/dashboard" class="btn btn-primary">Dashboard</a>
+        <button class="btn btn-ghost" onclick="logout()">Sign Out</button>
+      </div>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <h1>AI Agents You Can <span>Trust</span></h1>
+    <p>A secure platform for authorizing AI agents to take real-world actions — with full permission control, audit history, and blockchain support.</p>
+    <div class="hero-actions">
+      <button id="cta-login" class="btn btn-primary" onclick="login()">Get Started</button>
+      <a href="#features" class="btn btn-ghost">Learn More</a>
+    </div>
+  </section>
+
+  <section id="features" class="features">
+    <div class="feature-card">
+      <div class="feature-icon">🔐</div>
+      <h3>Permission System</h3>
+      <p>Fine-grained permissions per user and per agent. Grant, revoke, and audit access in real time.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🤖</div>
+      <h3>Multi-Model Agents</h3>
+      <p>Run agents powered by Claude or GPT-4 with tool use, blockchain actions, and web search.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⛓️</div>
+      <h3>Blockchain Integration</h3>
+      <p>Let agents read balances, send transactions, and interact with smart contracts on your behalf.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔌</div>
+      <h3>MCP Protocol</h3>
+      <p>Connect any MCP-compatible client to your agent via a secure SSE endpoint.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🗝️</div>
+      <h3>API Keys</h3>
+      <p>Create scoped API keys so external systems can call your agents without exposing credentials.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📋</div>
+      <h3>Full Audit History</h3>
+      <p>Every agent run, transaction, and permission change is logged and queryable.</p>
+    </div>
+  </section>
+
+  <script>
+    const AUTH0_DOMAIN   = '{{AUTH0_DOMAIN}}';
+    const AUTH0_CLIENT_ID = '{{AUTH0_CLIENT_ID}}';
+    const APP_URL = window.location.origin;
+
+    function login() {
+      const params = new URLSearchParams({
+        response_type: 'code',
+        client_id: AUTH0_CLIENT_ID,
+        redirect_uri: `${APP_URL}/auth/callback`,
+        scope: 'openid profile email',
+        audience: '{{AUTH0_AUDIENCE}}',
+      });
+      window.location.href = `https://${AUTH0_DOMAIN}/authorize?${params}`;
+    }
+
+    function logout() {
+      localStorage.removeItem('ata_token');
+      const params = new URLSearchParams({ client_id: AUTH0_CLIENT_ID, returnTo: APP_URL });
+      window.location.href = `https://${AUTH0_DOMAIN}/v2/logout?${params}`;
+    }
+
+    async function checkAuth() {
+      const token = localStorage.getItem('ata_token');
+      if (!token) {
+        document.getElementById('login-btn').style.display = 'inline-flex';
+        document.getElementById('cta-login').style.display = 'inline-flex';
+        return;
+      }
+      try {
+        const res = await fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) throw new Error('invalid');
+        const { user } = await res.json();
+        document.getElementById('login-btn').style.display = 'none';
+        document.getElementById('user-section').style.display = 'flex';
+        document.getElementById('cta-login').textContent = 'Go to Dashboard';
+        document.getElementById('cta-login').href = '/dashboard';
+        document.getElementById('cta-login').onclick = null;
+        document.getElementById('user-name').textContent = user.name || user.email;
+      } catch {
+        localStorage.removeItem('ata_token');
+        document.getElementById('login-btn').style.display = 'inline-flex';
+      }
+    }
+
+    checkAuth();
+  </script>
+</body>
+</html>

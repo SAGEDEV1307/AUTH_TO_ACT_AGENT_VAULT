@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>History — Authorized to Act</title>
+  <link rel="stylesheet" href="/styles/globals.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar-brand" href="/">Authorized <span>to Act</span></a>
+    <div class="flex gap-2 items-center">
+      <span id="user-name" class="text-sm text-muted"></span>
+      <button class="btn btn-ghost" onclick="logout()">Sign Out</button>
+    </div>
+  </nav>
+  <div class="layout">
+    <aside class="sidebar">
+      <a href="/dashboard">📊 Overview</a>
+      <a href="/dashboard/agent.html">🤖 Agent</a>
+      <a href="/dashboard/blockchain.html">⛓️ Blockchain</a>
+      <a href="/dashboard/history.html" class="active">📋 History</a>
+      <a href="/dashboard/keys.html">🗝️ API Keys</a>
+      <a href="/dashboard/settings.html">⚙️ Settings</a>
+    </aside>
+    <main class="main">
+      <h2 class="mb-4">Agent Run History</h2>
+      <div class="card">
+        <table class="table">
+          <thead><tr><th>Message</th><th>Model</th><th>Status</th><th>Tokens</th><th>Date</th></tr></thead>
+          <tbody id="history-table"><tr><td colspan="5" class="text-muted text-sm">Loading...</td></tr></tbody>
+        </table>
+        <div id="pagination" class="flex justify-between items-center mt-4" style="display:none!important;">
+          <button id="prev-btn" class="btn btn-ghost" onclick="changePage(-1)" disabled>← Prev</button>
+          <span id="page-info" class="text-muted text-sm"></span>
+          <button id="next-btn" class="btn btn-ghost" onclick="changePage(1)">Next →</button>
+        </div>
+      </div>
+      <div id="run-detail" class="card mt-4" style="display:none;">
+        <h3 class="mb-2">Run Detail</h3>
+        <div id="run-detail-content"></div>
+      </div>
+    </main>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    let authToken = null, page = 1, total = 0;
+    requireAuth(async (token) => { authToken = token; await loadHistory(); });
+
+    async function loadHistory() {
+      const res = await apiFetch(`/api/agent/history?page=${page}&limit=20`, authToken);
+      const data = await res.json();
+      total = data.total;
+      const tbody = document.getElementById('history-table');
+      if (!data.runs.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-sm">No agent runs yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.runs.map(r => `
+        <tr style="cursor:pointer;" onclick="viewRun('${r.id}')">
+          <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(r.user_message)}</td>
+          <td><code style="font-size:12px;">${r.model}</code></td>
+          <td><span class="badge badge-${statusColor(r.status)}">${r.status}</span></td>
+          <td class="text-muted text-sm">${(r.input_tokens||0)+(r.output_tokens||0) || '—'}</td>
+          <td class="text-muted text-sm">${new Date(r.created_at).toLocaleString()}</td>
+        </tr>`).join('');
+
+      const pag = document.getElementById('pagination');
+      pag.style.display = total > 20 ? 'flex' : 'none';
+      document.getElementById('page-info').textContent = `Page ${page} of ${Math.ceil(total/20)}`;
+      document.getElementById('prev-btn').disabled = page <= 1;
+      document.getElementById('next-btn').disabled = page >= Math.ceil(total/20);
+    }
+
+    async function viewRun(id) {
+      const res = await apiFetch(`/api/agent/status/${id}`, authToken);
+      const run = await res.json();
+      document.getElementById('run-detail').style.display = 'block';
+      document.getElementById('run-detail-content').innerHTML = `
+        <div class="text-muted text-sm mb-2">Status: <span class="badge badge-${statusColor(run.status)}">${run.status}</span></div>
+        <div class="mb-2"><strong>Message:</strong> ${escHtml(run.user_message)}</div>
+        ${run.final_response ? `<div class="mb-2"><strong>Response:</strong> ${escHtml(run.final_response)}</div>` : ''}
+        ${run.error ? `<div class="text-danger text-sm">Error: ${escHtml(run.error)}</div>` : ''}`;
+      document.getElementById('run-detail').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function changePage(dir) { page += dir; loadHistory(); }
+    function statusColor(s) { return { completed:'green', failed:'red', running:'yellow', pending:'purple' }[s] || 'purple'; }
+    function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  </script>
+</body>
+</html>

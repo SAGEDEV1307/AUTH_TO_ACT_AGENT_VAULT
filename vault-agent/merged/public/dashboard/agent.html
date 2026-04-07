@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent — Authorized to Act</title>
+  <link rel="stylesheet" href="/styles/globals.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar-brand" href="/">Authorized <span>to Act</span></a>
+    <div class="flex gap-2 items-center">
+      <span id="user-name" class="text-sm text-muted"></span>
+      <button class="btn btn-ghost" onclick="logout()">Sign Out</button>
+    </div>
+  </nav>
+  <div class="layout">
+    <aside class="sidebar">
+      <a href="/dashboard">📊 Overview</a>
+      <a href="/dashboard/agent.html" class="active">🤖 Agent</a>
+      <a href="/dashboard/blockchain.html">⛓️ Blockchain</a>
+      <a href="/dashboard/history.html">📋 History</a>
+      <a href="/dashboard/keys.html">🗝️ API Keys</a>
+      <a href="/dashboard/settings.html">⚙️ Settings</a>
+    </aside>
+    <main class="main" style="padding:0;">
+      <div class="chat-container">
+        <div class="chat-messages" id="messages">
+          <div class="chat-msg agent">👋 Hello! I'm your AI agent. I can search the web, read blockchain data, send transactions, and more — based on your permissions. What would you like me to do?</div>
+        </div>
+        <div class="chat-input-row">
+          <select id="provider" class="input" style="width:130px;flex-shrink:0;">
+            <option value="anthropic">Claude</option>
+            <option value="openai">GPT-4o</option>
+          </select>
+          <textarea id="msg-input" placeholder="Ask the agent to do something..." onkeydown="handleKey(event)"></textarea>
+          <button id="send-btn" class="btn btn-primary" onclick="sendMessage()">Send</button>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    let authToken = null;
+    requireAuth((token) => { authToken = token; });
+
+    function handleKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    }
+
+    function appendMsg(text, role) {
+      const div = document.createElement('div');
+      div.className = `chat-msg ${role}`;
+      div.textContent = text;
+      const msgs = document.getElementById('messages');
+      msgs.appendChild(div);
+      msgs.scrollTop = msgs.scrollHeight;
+      return div;
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('msg-input');
+      const message = input.value.trim();
+      if (!message || !authToken) return;
+
+      input.value = '';
+      document.getElementById('send-btn').disabled = true;
+      appendMsg(message, 'user');
+
+      const thinking = appendMsg('', 'agent');
+      thinking.innerHTML = '<span class="spinner"></span> Thinking...';
+
+      try {
+        const provider = document.getElementById('provider').value;
+        const res = await apiFetch('/api/agent/run', authToken, {
+          method: 'POST',
+          body: { message, provider },
+        });
+        const data = await res.json();
+        thinking.textContent = data.finalResponse || data.error || 'No response';
+      } catch (err) {
+        thinking.textContent = 'Error: ' + err.message;
+        thinking.style.color = 'var(--danger)';
+      } finally {
+        document.getElementById('send-btn').disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

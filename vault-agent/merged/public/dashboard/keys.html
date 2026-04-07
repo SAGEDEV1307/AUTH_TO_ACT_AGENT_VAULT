@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Keys — Authorized to Act</title>
+  <link rel="stylesheet" href="/styles/globals.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar-brand" href="/">Authorized <span>to Act</span></a>
+    <div class="flex gap-2 items-center">
+      <span id="user-name" class="text-sm text-muted"></span>
+      <button class="btn btn-ghost" onclick="logout()">Sign Out</button>
+    </div>
+  </nav>
+  <div class="layout">
+    <aside class="sidebar">
+      <a href="/dashboard">📊 Overview</a>
+      <a href="/dashboard/agent.html">🤖 Agent</a>
+      <a href="/dashboard/blockchain.html">⛓️ Blockchain</a>
+      <a href="/dashboard/history.html">📋 History</a>
+      <a href="/dashboard/keys.html" class="active">🗝️ API Keys</a>
+      <a href="/dashboard/settings.html">⚙️ Settings</a>
+    </aside>
+    <main class="main">
+      <div class="flex justify-between items-center mb-4">
+        <h2>API Keys</h2>
+        <button class="btn btn-primary" onclick="document.getElementById('create-form').style.display='block'">+ New Key</button>
+      </div>
+
+      <div id="create-form" class="card mb-4" style="display:none;">
+        <h3 class="mb-4">Create New API Key</h3>
+        <div class="flex gap-2">
+          <input id="key-name" class="input" placeholder="Key name (e.g. my-app)" maxlength="64">
+          <button class="btn btn-primary" onclick="createKey()">Create</button>
+          <button class="btn btn-ghost" onclick="document.getElementById('create-form').style.display='none'">Cancel</button>
+        </div>
+      </div>
+
+      <div id="new-key-banner" class="card mb-4" style="display:none;border-color:var(--success);">
+        <p class="text-success mb-2">⚠️ Copy this key now — it will not be shown again.</p>
+        <code id="new-key-value" style="word-break:break-all;font-size:13px;"></code>
+      </div>
+
+      <div class="card">
+        <table class="table">
+          <thead><tr><th>Name</th><th>Last Used</th><th>Status</th><th>Created</th><th></th></tr></thead>
+          <tbody id="keys-table"><tr><td colspan="5" class="text-muted text-sm">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    let authToken = null;
+    requireAuth(async (token) => {
+      authToken = token;
+      await loadKeys();
+    });
+
+    async function loadKeys() {
+      const res = await apiFetch('/api/keys', authToken);
+      const { keys } = await res.json();
+      const tbody = document.getElementById('keys-table');
+      if (!keys.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-sm">No API keys yet</td></tr>';
+        return;
+      }
+      tbody.innerHTML = keys.map(k => `
+        <tr>
+          <td>${escHtml(k.name)}</td>
+          <td class="text-muted text-sm">${k.last_used ? new Date(k.last_used).toLocaleString() : 'Never'}</td>
+          <td><span class="badge ${k.revoked_at ? 'badge-red' : 'badge-green'}">${k.revoked_at ? 'Revoked' : 'Active'}</span></td>
+          <td class="text-muted text-sm">${new Date(k.created_at).toLocaleDateString()}</td>
+          <td>${!k.revoked_at ? `<button class="btn btn-danger" style="padding:4px 10px;font-size:12px;" onclick="revokeKey('${k.id}')">Revoke</button>` : ''}</td>
+        </tr>`).join('');
+    }
+
+    async function createKey() {
+      const name = document.getElementById('key-name').value.trim();
+      if (!name) return alert('Enter a key name');
+      const res = await apiFetch('/api/keys', authToken, { method: 'POST', body: { name } });
+      const data = await res.json();
+      if (data.key) {
+        document.getElementById('new-key-value').textContent = data.key;
+        document.getElementById('new-key-banner').style.display = 'block';
+        document.getElementById('create-form').style.display = 'none';
+        document.getElementById('key-name').value = '';
+        await loadKeys();
+      }
+    }
+
+    async function revokeKey(id) {
+      if (!confirm('Revoke this API key? This cannot be undone.')) return;
+      await apiFetch(`/api/keys/${id}`, authToken, { method: 'DELETE' });
+      await loadKeys();
+    }
+
+    function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  </script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings — Authorized to Act</title>
+  <link rel="stylesheet" href="/styles/globals.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="navbar-brand" href="/">Authorized <span>to Act</span></a>
+    <div class="flex gap-2 items-center">
+      <span id="user-name" class="text-sm text-muted"></span>
+      <button class="btn btn-ghost" onclick="logout()">Sign Out</button>
+    </div>
+  </nav>
+  <div class="layout">
+    <aside class="sidebar">
+      <a href="/dashboard">📊 Overview</a>
+      <a href="/dashboard/agent.html">🤖 Agent</a>
+      <a href="/dashboard/blockchain.html">⛓️ Blockchain</a>
+      <a href="/dashboard/history.html">📋 History</a>
+      <a href="/dashboard/keys.html">🗝️ API Keys</a>
+      <a href="/dashboard/settings.html" class="active">⚙️ Settings</a>
+    </aside>
+    <main class="main">
+      <h2 class="mb-4">Settings</h2>
+      <div class="card mb-4">
+        <h3 class="mb-4">Your Profile</h3>
+        <div id="profile-info">Loading...</div>
+      </div>
+      <div class="card mb-4">
+        <h3 class="mb-4">Your Permissions</h3>
+        <div id="permissions-list">Loading...</div>
+      </div>
+      <div class="card">
+        <h3 class="mb-4">Blockchain Wallet</h3>
+        <p class="text-muted text-sm mb-4">Create a new wallet managed by this platform, or import an existing one.</p>
+        <button class="btn btn-primary" onclick="createWallet()">Create New Wallet</button>
+        <div id="wallet-result" class="mt-4" style="display:none;"></div>
+      </div>
+    </main>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    let authToken = null;
+    requireAuth(async (token) => {
+      authToken = token;
+      const [meRes, permsRes] = await Promise.all([
+        apiFetch('/api/auth/me', token),
+        apiFetch('/api/auth/permissions', token),
+      ]);
+      const { user } = await meRes.json();
+      const { permissions, role } = await permsRes.json();
+
+      document.getElementById('profile-info').innerHTML = `
+        <div class="flex gap-4 items-center">
+          ${user.picture ? `<img src="${user.picture}" width="48" height="48" style="border-radius:50%;">` : ''}
+          <div>
+            <div style="font-weight:600;">${escHtml(user.name||'')}</div>
+            <div class="text-muted text-sm">${escHtml(user.email)}</div>
+            <div class="mt-1"><span class="badge badge-purple">${role}</span></div>
+          </div>
+        </div>`;
+
+      document.getElementById('permissions-list').innerHTML = permissions.length
+        ? permissions.map(p => `<span class="badge badge-purple" style="margin:3px;">${p}</span>`).join('')
+        : '<span class="text-muted text-sm">No permissions assigned</span>';
+    });
+
+    async function createWallet() {
+      const result = document.getElementById('wallet-result');
+      result.style.display = 'block';
+      result.innerHTML = '<span class="spinner"></span>';
+      try {
+        const res = await apiFetch('/api/blockchain/wallet', authToken, { method: 'POST', body: {} });
+        const data = await res.json();
+        if (data.address) {
+          result.innerHTML = `<div class="text-success text-sm">Wallet created!</div><code style="font-size:12px;word-break:break-all;">${data.address}</code>`;
+        } else {
+          result.innerHTML = `<span class="text-danger text-sm">${data.error || 'Failed'}</span>`;
+        }
+      } catch(err) {
+        result.innerHTML = `<span class="text-danger text-sm">${err.message}</span>`;
+      }
+    }
+
+    function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  </script>
+</body>
+</html>
