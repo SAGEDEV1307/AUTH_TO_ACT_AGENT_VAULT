@@ -1,0 +1,64 @@
+services:
+  - type: web
+    name: vault-agent
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: node dist/src/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: HTTPS_PORT
+        value: 8443
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vault-agent-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: vault-agent-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: API_MASTER_KEY
+        sync: false
+      - key: AUTH0_DOMAIN
+        sync: false
+      - key: AUTH0_CLIENT_ID
+        sync: false
+      - key: AUTH0_CLIENT_SECRET
+        sync: false
+      - key: AUTH0_AUDIENCE
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_OWNER_CHAT_ID
+        sync: false
+      - key: PLAID_CLIENT_ID
+        sync: false
+      - key: PLAID_SECRET
+        sync: false
+      - key: PLAID_ACCESS_TOKEN
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: ETH_RPC_URL
+        sync: false
+      - key: AGENT_WALLET_ENCRYPTED_KEY
+        sync: false
+      - key: WALLET_ENCRYPTION_PASSPHRASE
+        sync: false
+
+databases:
+  - name: vault-agent-db
+    databaseName: vault_agent
+    plan: starter
